@@ -2,7 +2,7 @@ numpy
 streamlit
 Pillow
 mediapipe
-matplotlib
+plotly
 scikit-learn
 joblib
 typing
