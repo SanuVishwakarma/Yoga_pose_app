@@ -5,7 +5,7 @@ import sys
 try:
     import cv2
 except ImportError:
-    os.system('pip install opencv-python-headless==4.10.0.84')
+    os.system('pip install opencv-python-headless==4.8.1.78')
     import cv2
 
 import streamlit as st
