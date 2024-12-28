@@ -1,9 +1,17 @@
+import os
+import sys
+
+# Install required packages if they're not already installed
+try:
+    import cv2
+except ImportError:
+    os.system('pip install opencv-python-headless==4.10.0.84')
+    import cv2
+
 import streamlit as st
-import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 import tempfile
-import os
 from typing import Optional
 import mediapipe as mp
 import joblib
