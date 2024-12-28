@@ -1,11 +1,8 @@
-streamlit
-opencv-python-headless
-mediapipe
 numpy
+streamlit
+Pillow
+mediapipe
 matplotlib
 scikit-learn
 joblib
-python-multipart
-pillow
-fastapi
-uvicorn
+typing
