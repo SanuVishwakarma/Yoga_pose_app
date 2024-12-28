@@ -3,7 +3,8 @@ import sys
 from PIL import Image
 import numpy as np
 import streamlit as st
-import matplotlib.pyplot as plt
+import plotly.graph_objects as go
+import plotly.express as px
 import tempfile
 from typing import Optional
 import mediapipe as mp
@@ -14,14 +15,11 @@ mp_pose = mp.solutions.pose
 mp_drawing = mp.solutions.drawing_utils
 pose = mp_pose.Pose()
 
-# Load model and mappings (update the path as needed)
+# Load model and mappings
 try:
     model = joblib.load(r"C:\Users\sanuv\OneDrive\Desktop\my_yoga_app\my_yoga_app\model\MediaPipe_Model.pkl")
 except:
     st.error("Error loading model. Please check the model path.")
-
-# Your existing label_to_pose_name and reference_angles dictionaries remain the same
-# [Previous dictionaries code remains unchanged]
 
 label_to_pose_name = {
  0: 'adho mukha svanasana',
@@ -712,10 +710,68 @@ def extract_angles(landmarks):
 
     return angles
 
-def get_reference_image_link(predicted_pose: str) -> Optional[str]:
-    """Get the reference image link for the given predicted pose."""
-    # [Previous get_reference_image_link function remains unchanged]
-    return None
+def plot_skeleton(image_array, landmarks, width=None, height=None):
+    """Create a plotly figure with the pose skeleton overlay."""
+    if width is None or height is None:
+        height, width = image_array.shape[:2]
+
+    # Create figure
+    fig = go.Figure()
+
+    # Add image as background
+    fig.add_trace(
+        go.Image(
+            z=image_array,
+            name="background"
+        )
+    )
+
+    # Plot landmarks and connections
+    x_coords = []
+    y_coords = []
+    connections = []
+    
+    # Extract landmark coordinates
+    for landmark in landmarks.landmark:
+        x_coords.append(landmark.x * width)
+        y_coords.append(height - (landmark.y * height))  # Flip y-coordinates
+
+    # Add landmarks
+    fig.add_trace(
+        go.Scatter(
+            x=x_coords,
+            y=y_coords,
+            mode='markers',
+            marker=dict(color='red', size=5),
+            name='landmarks'
+        )
+    )
+
+    # Add connections
+    for connection in mp_pose.POSE_CONNECTIONS:
+        start_idx = connection[0]
+        end_idx = connection[1]
+        fig.add_trace(
+            go.Scatter(
+                x=[x_coords[start_idx], x_coords[end_idx]],
+                y=[y_coords[start_idx], y_coords[end_idx]],
+                mode='lines',
+                line=dict(color='blue', width=2),
+                showlegend=False
+            )
+        )
+
+    # Update layout
+    fig.update_layout(
+        showlegend=False,
+        margin=dict(l=0, r=0, t=0, b=0),
+        width=width,
+        height=height,
+        xaxis=dict(showgrid=False, zeroline=False, visible=False),
+        yaxis=dict(showgrid=False, zeroline=False, visible=False)
+    )
+
+    return fig
 
 def predict_and_visualize(image_pil):
     """Predict the yoga pose and provide feedback."""
@@ -745,12 +801,8 @@ def predict_and_visualize(image_pil):
 
         feedback_message = feedback if feedback else ["Great job! Your pose matches the reference."]
 
-        # Draw landmarks on a copy of the image
-        image_with_landmarks = image_np.copy()
-        mp_drawing.draw_landmarks(image_with_landmarks, results.pose_landmarks, mp_pose.POSE_CONNECTIONS)
-
-        # Convert back to PIL Image
-        visualization = Image.fromarray(image_with_landmarks)
+        # Create visualization using plotly
+        visualization = plot_skeleton(image_np, results.pose_landmarks)
 
         # Get reference image link
         reference_image_link = get_reference_image_link(predicted_pose)
@@ -784,7 +836,21 @@ def main():
         with col2:
             st.subheader("Pose Detection")
             if visualization is not None:
-                st.image(visualization, use_column_width=True)
+                st.plotly_chart(visualization, use_container_width=True)
+
+        # Display angle visualization if available
+        if feedback and any('off by' in item for item in feedback):
+            angle_data = [float(item.split('off by')[1].strip('°')) for item in feedback if 'off by' in item]
+            joint_names = [item.split('Adjust your')[1].split(',')[0].strip() for item in feedback if 'off by' in item]
+            
+            # Create angle difference visualization
+            fig = px.bar(
+                x=joint_names, 
+                y=angle_data,
+                title="Angle Differences from Reference Pose",
+                labels={'x': 'Joint', 'y': 'Angle Difference (degrees)'}
+            )
+            st.plotly_chart(fig)
 
         # Display results
         st.subheader("Results")
@@ -802,4 +868,5 @@ def main():
             st.image(reference_image_link)
 
 if __name__ == "__main__":
+    main()
     main()
