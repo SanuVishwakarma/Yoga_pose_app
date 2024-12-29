@@ -1,0 +1,9 @@
+streamlit
+opencv-python-headless
+mediapipe
+numpy
+matplotlib
+scikit-learn
+joblib
+python-multipart
+pillow
