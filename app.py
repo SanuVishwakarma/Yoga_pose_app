@@ -1,10 +1,16 @@
 import os
 import sys
-from PIL import Image
-import numpy as np
+
+# Install required packages if they're not already installed
+try:
+    import cv2
+except ImportError:
+    os.system('pip install opencv-python-headless==4.8.1.78')
+    import cv2
+
 import streamlit as st
-import plotly.graph_objects as go
-import plotly.express as px
+import numpy as np
+import matplotlib.pyplot as plt
 import tempfile
 from typing import Optional
 import mediapipe as mp
@@ -15,11 +21,12 @@ mp_pose = mp.solutions.pose
 mp_drawing = mp.solutions.drawing_utils
 pose = mp_pose.Pose()
 
-# Load model and mappings
+# Load model and mappings (update the path as needed)
 try:
     model = joblib.load(r"C:\Users\sanuv\OneDrive\Desktop\my_yoga_app\my_yoga_app\model\MediaPipe_Model.pkl")
 except:
     st.error("Error loading model. Please check the model path.")
+
 
 label_to_pose_name = {
  0: 'adho mukha svanasana',
@@ -605,19 +612,26 @@ reference_angles = {
     }
   }
 
+
+
 def calculate_angle(a, b, c):
-    """Calculate the angle between three points."""
+    """
+    Calculate the angle between three points.
+    """
     ba = np.array([a[0] - b[0], a[1] - b[1]])
     bc = np.array([c[0] - b[0], c[1] - b[1]])
     cosine_angle = np.dot(ba, bc) / (np.linalg.norm(ba) * np.linalg.norm(bc))
     angle = np.arccos(np.clip(cosine_angle, -1.0, 1.0))
     return np.degrees(angle)
 
+
 def extract_angles(landmarks):
     """
     Extracts angles between key body points using Mediapipe landmarks.
+
     Parameters:
         landmarks: A list of Mediapipe landmarks.
+
     Returns:
         A dictionary of angles with body parts as keys.
     """
@@ -710,77 +724,37 @@ def extract_angles(landmarks):
 
     return angles
 
-def plot_skeleton(image_array, landmarks, width=None, height=None):
-    """Create a plotly figure with the pose skeleton overlay."""
-    if width is None or height is None:
-        height, width = image_array.shape[:2]
-
-    # Create figure
-    fig = go.Figure()
-
-    # Add image as background
-    fig.add_trace(
-        go.Image(
-            z=image_array,
-            name="background"
-        )
-    )
-
-    # Plot landmarks and connections
-    x_coords = []
-    y_coords = []
-    connections = []
+def get_reference_image_link(predicted_pose: str) -> Optional[str]:
+    """Get the reference image link for the given predicted pose."""
+    text_file_path = r"C:\Users\sanuv\OneDrive\Desktop\my_yoga_app\my_yoga_app\pose links.txt"
     
-    # Extract landmark coordinates
-    for landmark in landmarks.landmark:
-        x_coords.append(landmark.x * width)
-        y_coords.append(height - (landmark.y * height))  # Flip y-coordinates
+    try:
+        with open(text_file_path, "r") as f:
+            lines = f.readlines()
 
-    # Add landmarks
-    fig.add_trace(
-        go.Scatter(
-            x=x_coords,
-            y=y_coords,
-            mode='markers',
-            marker=dict(color='red', size=5),
-            name='landmarks'
-        )
-    )
+        for line in lines:
+            parts = line.strip().split(",")
+            if len(parts) != 2:
+                continue
+            pose_name, image_link = parts[0].strip().lower(), parts[1].strip()
 
-    # Add connections
-    for connection in mp_pose.POSE_CONNECTIONS:
-        start_idx = connection[0]
-        end_idx = connection[1]
-        fig.add_trace(
-            go.Scatter(
-                x=[x_coords[start_idx], x_coords[end_idx]],
-                y=[y_coords[start_idx], y_coords[end_idx]],
-                mode='lines',
-                line=dict(color='blue', width=2),
-                showlegend=False
-            )
-        )
+            if pose_name == predicted_pose.lower():
+                return image_link
 
-    # Update layout
-    fig.update_layout(
-        showlegend=False,
-        margin=dict(l=0, r=0, t=0, b=0),
-        width=width,
-        height=height,
-        xaxis=dict(showgrid=False, zeroline=False, visible=False),
-        yaxis=dict(showgrid=False, zeroline=False, visible=False)
-    )
+        return None
+    except FileNotFoundError:
+        st.error("Text file for pose links not found")
+        return None
+    except Exception as e:
+        st.error(f"Error reading text file: {str(e)}")
+        return None
 
-    return fig
-
-def predict_and_visualize(image_pil):
+def predict_and_visualize(image):
     """Predict the yoga pose and provide feedback."""
     try:
-        # Convert PIL Image to RGB numpy array
-        image_np = np.array(image_pil)
-        
-        # Process the image with MediaPipe
-        results = pose.process(image_np)
+        # Process the image
+        image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        results = pose.process(image_rgb)
 
         if not results.pose_landmarks:
             return "No pose detected", None, None, None
@@ -801,13 +775,13 @@ def predict_and_visualize(image_pil):
 
         feedback_message = feedback if feedback else ["Great job! Your pose matches the reference."]
 
-        # Create visualization using plotly
-        visualization = plot_skeleton(image_np, results.pose_landmarks)
+        # Draw landmarks
+        mp_drawing.draw_landmarks(image_rgb, results.pose_landmarks, mp_pose.POSE_CONNECTIONS)
 
         # Get reference image link
         reference_image_link = get_reference_image_link(predicted_pose)
 
-        return predicted_pose, feedback_message, reference_image_link, visualization
+        return predicted_pose, feedback_message, reference_image_link, image_rgb
 
     except Exception as e:
         return str(e), None, None, None
@@ -820,15 +794,16 @@ def main():
     uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
 
     if uploaded_file is not None:
-        # Open image using PIL
-        image = Image.open(uploaded_file)
-        
+        # Convert uploaded file to image
+        file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
+        image = cv2.imdecode(file_bytes, 1)
+
         # Create two columns for side-by-side display
         col1, col2 = st.columns(2)
 
         with col1:
             st.subheader("Your Image")
-            st.image(image, use_column_width=True)
+            st.image(image, channels="BGR", use_column_width=True)
 
         # Process the image and get results
         predicted_pose, feedback, reference_image_link, visualization = predict_and_visualize(image)
@@ -836,21 +811,7 @@ def main():
         with col2:
             st.subheader("Pose Detection")
             if visualization is not None:
-                st.plotly_chart(visualization, use_container_width=True)
-
-        # Display angle visualization if available
-        if feedback and any('off by' in item for item in feedback):
-            angle_data = [float(item.split('off by')[1].strip('°')) for item in feedback if 'off by' in item]
-            joint_names = [item.split('Adjust your')[1].split(',')[0].strip() for item in feedback if 'off by' in item]
-            
-            # Create angle difference visualization
-            fig = px.bar(
-                x=joint_names, 
-                y=angle_data,
-                title="Angle Differences from Reference Pose",
-                labels={'x': 'Joint', 'y': 'Angle Difference (degrees)'}
-            )
-            st.plotly_chart(fig)
+                st.image(visualization, channels="RGB", use_column_width=True)
 
         # Display results
         st.subheader("Results")
@@ -868,5 +829,4 @@ def main():
             st.image(reference_image_link)
 
 if __name__ == "__main__":
-    main()
     main()
