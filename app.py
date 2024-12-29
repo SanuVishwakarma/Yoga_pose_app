@@ -23,7 +23,7 @@ pose = mp_pose.Pose()
 
 # Load model and mappings (update the path as needed)
 try:
-    model = joblib.load(r"C:\Users\sanuv\OneDrive\Desktop\my_yoga_app\my_yoga_app\model\MediaPipe_Model.pkl")
+    model = joblib.load("MediaPipe_Model.pkl")
 except:
     st.error("Error loading model. Please check the model path.")
 
@@ -726,7 +726,7 @@ def extract_angles(landmarks):
 
 def get_reference_image_link(predicted_pose: str) -> Optional[str]:
     """Get the reference image link for the given predicted pose."""
-    text_file_path = r"C:\Users\sanuv\OneDrive\Desktop\my_yoga_app\my_yoga_app\pose links.txt"
+    text_file_path = "pose links.txt"
     
     try:
         with open(text_file_path, "r") as f:
